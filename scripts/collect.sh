@@ -91,7 +91,8 @@ linux-arm64 ffmpeg-master-latest-linuxarm64-gpl.tar.xz
 EOF
 # macOS: static builds by Martin Riedl (FFmpeg-Builds has none), each with its .sha256
 while read -r key plat; do
-  url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$plat/release/ffmpeg.zip")
+  # this redirect answers HEAD with 404: follow it with a 1-byte GET instead
+  url=$(curl -fsSL -r 0-0 -o /dev/null -w '%{url_effective}' "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$plat/release/ffmpeg.zip")
   fetch "$url" "mac-$plat.zip"
   check "mac-$plat.zip" "$(curl -fsSL "$url.sha256" | cut -d' ' -f1)"
   out="ffmpeg-$key.zip"
