@@ -1,4 +1,4 @@
-# Collects the programs Tube needs (yt-dlp, Deno, ffmpeg) for every OS from their official sources,
+# Collects the programs Tube needs (yt-dlp, Node.js, ffmpeg) for every OS from their official sources,
 # checks each against its published SHA-256, and publishes them as one release with a manifest.
 # Tube downloads only from here: https://github.com/net-runners-com/tube-tools/releases/latest
 name: release

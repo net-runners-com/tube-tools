@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Downloads yt-dlp, Deno and ffmpeg for every platform Tube runs on, verifies each against the
+# Downloads yt-dlp, Node.js and ffmpeg for every platform Tube runs on, verifies each against the
 # checksum its publisher posts, repackages them as zips and writes manifest.json:
 #   { "tools": { "<tool>": { "version": "...", "assets": { "<os>-<arch>": { "file": "...", "sha256": "..." } } } } }
 # <os> is Node's process.platform (darwin, win32, linux); <arch> is process.arch (x64, arm64).
@@ -46,25 +46,31 @@ linux-x64 yt-dlp_linux.zip
 linux-arm64 yt-dlp_linux_aarch64.zip
 EOF
 
-# ---- Deno: yt-dlp's JavaScript runtime for YouTube's player
-DENO=$(latest_tag denoland/deno)
-while read -r key target; do
-  zip="deno-$target.zip"
-  fetch "https://github.com/denoland/deno/releases/download/$DENO/$zip" "$zip"
-  fetch "https://github.com/denoland/deno/releases/download/$DENO/$zip.sha256sum" "$zip.sha"
-  # sha256sum format on most targets, PowerShell's Get-FileHash table on Windows: take the 64-hex value
-  check "$zip" "$(grep -oiE '[0-9a-f]{64}' "$zip.sha" | head -1 | tr 'A-F' 'a-f')"
-  out="deno-$key.zip"
-  cp "$zip" "$OUT/$out"
-  add deno "$DENO" "$key" "$out"
-done <<'EOF'
-darwin-arm64 aarch64-apple-darwin
-darwin-x64 x86_64-apple-darwin
-win32-x64 x86_64-pc-windows-msvc
-win32-arm64 x86_64-pc-windows-msvc
-linux-x64 x86_64-unknown-linux-gnu
-linux-arm64 aarch64-unknown-linux-gnu
-EOF
+# ---- Node.js (current LTS): yt-dlp's JavaScript runtime for YouTube's player. Only the node
+# program is kept (no npm), checked against nodejs.org's SHASUMS256.txt.
+NODE=$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts != false)][0].version')
+fetch "https://nodejs.org/dist/$NODE/SHASUMS256.txt" node.sums
+while read -r key asset; do
+  fetch "https://nodejs.org/dist/$NODE/$asset" "$asset"
+  check "$asset" "$(sumof node.sums "$asset")"
+  rm -rf x && mkdir x
+  case "$asset" in
+    *.zip) unzip -q "$asset" -d x ;;
+    *.tar.xz) tar -xJf "$asset" -C x ;;
+    *.tar.gz) tar -xzf "$asset" -C x ;;
+  esac
+  bin=$(find x -type f \( -path '*/bin/node' -o -name node.exe \) | head -1)
+  out="node-$key.zip"
+  (cd "$(dirname "$bin")" && zip -q -9 "$OUT/$out" "$(basename "$bin")")
+  add node "$NODE" "$key" "$out"
+done <<EOF2
+darwin-arm64 node-$NODE-darwin-arm64.tar.gz
+darwin-x64 node-$NODE-darwin-x64.tar.gz
+win32-x64 node-$NODE-win-x64.zip
+win32-arm64 node-$NODE-win-arm64.zip
+linux-x64 node-$NODE-linux-x64.tar.xz
+linux-arm64 node-$NODE-linux-arm64.tar.xz
+EOF2
 
 # ---- ffmpeg: one program per platform, repackaged as a zip holding just ffmpeg(.exe)
 FFB=https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest
