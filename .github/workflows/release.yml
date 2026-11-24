@@ -1,0 +1,40 @@
+# Collects the programs Tube needs (yt-dlp, Deno, ffmpeg) for every OS from their official sources,
+# checks each against its published SHA-256, and publishes them as one release with a manifest.
+# Tube downloads only from here: https://github.com/net-runners-com/tube-tools/releases/latest
+name: release
+
+on:
+  schedule:
+    - cron: '17 4 * * 1' # weekly, Monday 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch, verify and repackage
+        run: bash scripts/collect.sh out
+
+      - name: Skip when nothing changed
+        id: same
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh release download --repo "$GITHUB_REPOSITORY" --pattern manifest.json --output - 2>/dev/null | jq -c '.tools | map_values(.version)' || echo '{}')
+          now=$(jq -c '.tools | map_values(.version)' out/manifest.json)
+          echo "prev=$prev now=$now"
+          if [ "$prev" = "$now" ] && [ "${{ github.event_name }}" = "schedule" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Publish
+        if: steps.same.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="tools-$(date -u +%Y%m%d-%H%M)"
+          notes=$(jq -r '.tools | to_entries | map("- \(.key) \(.value.version)") | join("\n")' out/manifest.json)
+          gh release create "$tag" out/* --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "$notes" --latest
