@@ -52,7 +52,8 @@ while read -r key target; do
   zip="deno-$target.zip"
   fetch "https://github.com/denoland/deno/releases/download/$DENO/$zip" "$zip"
   fetch "https://github.com/denoland/deno/releases/download/$DENO/$zip.sha256sum" "$zip.sha"
-  check "$zip" "$(cut -d' ' -f1 "$zip.sha" | tr 'A-F' 'a-f')"
+  # sha256sum format on most targets, PowerShell's Get-FileHash table on Windows: take the 64-hex value
+  check "$zip" "$(grep -oiE '[0-9a-f]{64}' "$zip.sha" | head -1 | tr 'A-F' 'a-f')"
   out="deno-$key.zip"
   cp "$zip" "$OUT/$out"
   add deno "$DENO" "$key" "$out"
